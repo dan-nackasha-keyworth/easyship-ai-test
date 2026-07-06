@@ -53,9 +53,9 @@
   <div class="stat" style="--col:#f87171"><div class="sv">1 day</div><div class="sl">to presentation</div></div>
   <div class="stat" style="--col:#fbbf24"><div class="sv">3/4</div><div class="sl">part 1 components</div></div>
   <div class="stat" style="--col:#34d399"><div class="sv">9/9</div><div class="sl">part 2 build items</div></div>
-  <div class="stat" style="--col:#34d399"><div class="sv">94.0%</div><div class="sl">latest accuracy</div></div>
-  <div class="stat" style="--col:#60a5fa"><div class="sv">$1.03</div><div class="sl">latest run cost</div></div>
-  <div class="stat"><div class="sv">27</div><div class="sl">git commits</div></div>
+  <div class="stat" style="--col:#34d399"><div class="sv">95.0%</div><div class="sl">latest accuracy</div></div>
+  <div class="stat" style="--col:#60a5fa"><div class="sv">$1.36</div><div class="sl">latest run cost</div></div>
+  <div class="stat"><div class="sv">2</div><div class="sl">git commits</div></div>
 </div>
 
 <div class="divider">Part 1 - strategy submission (in progress)</div>
@@ -105,7 +105,7 @@
     </div>
   </div>
   <div class="detail" id="detail-script">
-    See <strong>deck/loom_script.md</strong>. Covers architecture, five curated real messages (baseline, entry-channel override, retention risk without the word "cancel", Team Lead Triage honest uncertainty, and a flagship message hitting sensitive-topic override + loop-in + the agentic investigation at once), prompts + rationale, the real false-positive bug caught and fixed, commercial tie-back, and an honest next-version limit (the Opus 4.8 negative result). Includes backup Q&amp;A talking points for a live demo.
+    Kept as a private, company-named file (not in this public repo, same as the deck and build plan) since it's scripted around the real company. Covers architecture, five curated real messages (baseline, entry-channel override, retention risk without the word "cancel", Team Lead Triage honest uncertainty, and a flagship message hitting sensitive-topic override + loop-in + the agentic investigation at once), prompts + rationale, the real false-positive bug caught and fixed, commercial tie-back, and an honest next-version limit (the Opus 4.8 negative result). Includes backup Q&amp;A talking points for a live demo.
   </div>
 </div>
 
@@ -207,6 +207,22 @@
   </div>
   <div class="detail" id="detail-channel">
     7 deliberate override cases authored across the set. Result: 6/7 correctly classified by content despite the "wrong" channel; the 7th correctly escalated to Team Lead Triage rather than guessed.
+  </div>
+</div>
+
+<div class="card" id="card-routingfix">
+  <div class="card-summary" onclick="toggle('routingfix')">
+    <div class="icon" style="--col:#34d399;--bg:#052e16;--bdr:#065f46">&#10003;</div>
+    <div class="card-body">
+      <div class="card-header">
+        <span class="item-name">Routing fix + reference-grounded drafting + Enterprise AE</span>
+        <span class="item-note">Major routing correction, Help Centre/playbook grounding, second confidence score</span>
+        <div class="header-right"><span class="badge" style="--col:#34d399;--bg:rgba(52,211,153,0.12);--bdr:#065f46">Done</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="detail" id="detail-routingfix">
+    Four changes from one round of design review, tested together: (1) contradictory-signals messages now route to Team Lead Triage instead of defaulting to Success, so Success stops absorbing ambiguous technical escalations; (2) formal Close Account/Cancel Shipment requests stay Support-owned, looping in Success only for large accounts (new deterministic <code>arr_band</code> lookup, regex-based formal-request detection - caught and fixed a real gap in testing where "close our account" didn't match an earlier exact-phrase list); (3) a Sales message's stated shipment volume in the top band(s) now sets a distinct "Enterprise AE" handling path, mirroring the real Sales form's volume field; (4) drafting is now grounded in a matched mock Help Centre/playbook article when one exists (<code>find_matching_article</code>, keyword overlap, no extra API call), feeding a new second confidence score - <code>score_draft_confidence</code> - that answers "is this draft good enough to send," distinct from routing confidence. The agentic investigation step also gained a third tool, <code>search_help_centre</code>. Verified via 5 synthetic unit-test scenarios, a 4-message real-API test batch (<strong>results/routing_fix_check_run.html</strong>), and a fresh full 100-message dev run.
   </div>
 </div>
 
@@ -382,11 +398,19 @@
   </tr>
   <tr>
     <td>run_20260706T155809Z</td><td class="num">100</td><td class="num">94.0%</td><td class="num">$1.028</td>
-    <td><strong>Current reference run.</strong> Company/data fully genericized (Example Co.); classify_extract switched to temperature=0 for reproducibility after a false negative on msg_085 reproduced inconsistently at default temperature; a worked-example contrast fixed msg_085 for good. 0 sensitive-topic FPs. 3 retention-risk flags beyond narrow ground truth (msg_087, msg_096, msg_098) - each individually defensible, flagged here as an open question for the retention-risk definition rather than silently accepted. Latency measured: median 7.8s, p95 11.7s, max 37.8s.</td>
+    <td>Company/data fully genericized (Example Co.); classify_extract switched to temperature=0 for reproducibility after a false negative on msg_085 reproduced inconsistently at default temperature; a worked-example contrast fixed msg_085 for good. 0 sensitive-topic FPs.</td>
   </tr>
   <tr>
     <td>run_20260706T162440Z</td><td class="num">15</td><td class="num">100%</td><td class="num">$0.139</td>
     <td>New "success_mailbox" split - a fictional, unstructured Success-channel mailbox deliberately mixing Service/Success/Sales content, testing whether the entry-channel prior biases classification toward "Success". 15/15 correct, confirming it doesn't. See <strong>results/success_mailbox_run.html</strong>.</td>
+  </tr>
+  <tr>
+    <td>run_20260706T183153Z</td><td class="num">4</td><td class="num">75%</td><td class="num">$0.059</td>
+    <td>New "routing_fix_check" split validating the major routing correction (contradictory signals no longer default to Success; formal close/cancel requests stay Support-owned, looping in Success only for large accounts). All 3 routing decisions correct; the 4th (a deliberately ambiguous message) landed in Team Lead Triage as intended, not Success. See <strong>results/routing_fix_check_run.html</strong>.</td>
+  </tr>
+  <tr>
+    <td>run_20260706T190434Z</td><td class="num">100</td><td class="num">95.0%</td><td class="num">$1.361</td>
+    <td><strong>Current reference run.</strong> Everything combined: the routing fix, Enterprise AE volume-band routing (1 message routed), reference-grounded drafting (59/100 messages matched a real mock Help Centre/playbook article), and the new draft-quality confidence score (59 high / 19 low / 22 n/a). 0 sensitive-topic FPs; 2 retention-risk flags beyond narrow ground truth (msg_096, msg_098) - both already-reviewed defensible extra catches, not new bugs. Latency measured: median 7.6s, p95 15.3s, max 17.1s. Cost per message rose slightly (~1.4c vs ~1c) since reference-grounded drafting adds context to the drafting call - a reasonable trade for verifiably grounded answers.</td>
   </tr>
 </table>
 <div class="held-out-note">The 20-message held-out set has not been run. By design - reserved for one single validation pass near the very end, so prompt iteration is never tuned against it.</div>

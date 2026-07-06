@@ -34,8 +34,9 @@ CONFIG = {
     ],
 
     # Need-based signals that override channel-of-entry: these always
-    # indicate retention risk and route to Success even if raised via
-    # the Support channel.
+    # indicate retention risk. NOT all of them route to Success as primary
+    # owner though - see formal_close_cancel_phrases below and
+    # determine_queue's routing logic for the distinction.
     "retention_risk_signals": [
         "close account",
         "cancel account",
@@ -46,6 +47,41 @@ CONFIG = {
         "switching to a competitor",
         "leaving example co",
     ],
+
+    # Narrower than retention_risk_signals above: only the phrasing that
+    # matches a formal "Close Account" or "Cancel a Shipment" Help Centre
+    # category request specifically (two of the 8 real support-form
+    # categories) - a routine account-lifecycle action, not necessarily an
+    # active relationship conversation. Checked as regex patterns against
+    # the raw message text (deliberately not an LLM call - this is a
+    # narrow, auditable distinction, not a judgement call). Patterns
+    # rather than exact phrases so real phrasing variance (e.g. "close
+    # our account" vs "close my account") isn't missed just because the
+    # pronoun differs - caught during testing when a real dev-set message
+    # ("I'm ready to close our account") didn't match an earlier
+    # exact-phrase version of this list. Deliberately excludes softer
+    # signals like "downgrade" or "switching to a competitor", which
+    # genuinely are relationship-risk language and should stay
+    # Success-owned. determine_queue uses this to keep Support as the
+    # owner of formal close/cancel requests by default, looping in
+    # Success only when the account is large (see large_account_arr_bands)
+    # - otherwise Success becomes a dumping ground for routine account
+    # admin work and turns reactive instead of proactive.
+    "formal_close_cancel_patterns": [
+        r"\bclos\w*\b.{0,20}\baccount\b",
+        r"\bcancel\w*\b.{0,20}\baccount\b",
+        r"\bcancel\w*\b.{0,25}\bshipment\b",
+    ],
+
+    # ARR bands (see data/mock_backend.json's account records) treated as
+    # "large" for retention-escalation purposes - a distinct, higher bar
+    # than the $5K arr_threshold_sales_ae below, which is about routing
+    # inbound Sales enquiries, not escalating existing-account risk.
+    # Deliberately a starting assumption pending real usage data (see
+    # confidence rubric caveat in HOW_THE_AI_WORKS.md) - what counts as
+    # "large enough to warrant proactive Success visibility" is a business
+    # judgement call, not something inferable from this prototype alone.
+    "large_account_arr_bands": ["25k_to_100k", "100k_plus"],
 
     # Sensitive topics: always route to Service, never auto-resolved,
     # regardless of confidence score.
@@ -66,6 +102,15 @@ CONFIG = {
         "hacked",
         "unauthorized access",
     ],
+
+    # Shipment-volume bands (mirroring the real Sales/Contact form's
+    # "Approx. Shipments per Month or Total Orders" field) that route a
+    # Sales-category message to a dedicated Enterprise AE handling path
+    # rather than standard self-serve Sales. A concrete, form-grounded
+    # signal for the $5K ARR threshold's intent, not a separate rule -
+    # both exist to catch the same kind of prospect, from two different
+    # angles (stated volume here vs. inferred account revenue there).
+    "enterprise_ae_volume_bands": ["5000_to_10000", "10000_plus"],
 
     # $5K ARR threshold: total account revenue (subscription + shipping
     # margin), not subscription fees alone. On a subscription-only basis

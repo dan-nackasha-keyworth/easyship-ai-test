@@ -158,6 +158,7 @@ def card_html(r, idx):
             ("Sentiment / urgency", f"{extraction.get('sentiment','')} / {extraction.get('urgency','')}"),
             ("Expansion intent", extraction.get("expansion_intent_language", False)),
             ("Retention risk language", extraction.get("retention_risk_language", False)),
+            ("Shipment volume band", extraction.get("shipment_volume_band", "unknown")),
             ("Sensitive topic flags", ", ".join(extraction.get("sensitive_topic_flags", [])) or "none"),
             ("Entry channel", r.get("entry_channel") or "unknown"),
         ]
@@ -175,6 +176,30 @@ def card_html(r, idx):
     flags_block = tags(r.get("guardrail_flags", []), flag=True) or '<span class="tag">none</span>'
     cost = r.get("cost")
     cost_line = f"${cost:.6f}" if isinstance(cost, (int, float)) else "n/a"
+    sales_path = r.get("sales_handling_path")
+    sales_path_row = ""
+    if sales_path:
+        sales_path_row = (
+            '<div class="dl"><span class="k">Sales handling path</span>'
+            f'<span class="v">{html.escape(sales_path)}</span></div>'
+        )
+
+    draft_confidence = r.get("draft_confidence") or {}
+    band = html.escape(str(draft_confidence.get("band", "n/a")))
+    reason = html.escape(draft_confidence.get("reason", ""))
+    draft_confidence_block = (
+        '<div class="dl"><span class="k">Draft (answer-quality) confidence</span>'
+        f'<span class="v">{band} - {reason}</span></div>'
+    )
+
+    matched_reference = r.get("matched_reference")
+    reference_row = ""
+    if matched_reference:
+        ref_title = html.escape(matched_reference.get("title", ""))
+        reference_row = (
+            '<div class="dl"><span class="k">Reference used</span>'
+            f'<span class="v">{ref_title}</span></div>'
+        )
 
     detail = f"""
     <div class="detail" id="detail-{idx}">
@@ -194,8 +219,11 @@ def card_html(r, idx):
       <div class="dl"><span class="k">Looped in</span><span class="v">{', '.join(r.get('loop_in', [])) or 'none'}</span></div>
       <div class="dl"><span class="k">Guardrail flags</span><span class="v">{flags_block}</span></div>
       <div class="dl"><span class="k">Cost (this message)</span><span class="v">{cost_line}</span></div>
+      {sales_path_row}
 
       <h3>Draft reply</h3>
+      {draft_confidence_block}
+      {reference_row}
       {draft_block}
       {investigation_block}
     </div>"""

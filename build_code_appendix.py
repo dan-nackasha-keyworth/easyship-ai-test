@@ -21,10 +21,14 @@ PY_FILES = [
     "dashboard.py",
     "opus_comparison.py",
     "preview_server.py",
+    "run_eval.py",
 ]
 JSON_FILES = [
     "data/brand_guidelines.json",
     "data/mock_backend.json",
+    "data/help_centre_articles.json",
+    "data/success_playbook.json",
+    "data/sales_playbook.json",
 ]
 
 INTRO = """# AI Build - Code Appendix

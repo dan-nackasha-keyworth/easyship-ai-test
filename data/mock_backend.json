@@ -21,6 +21,20 @@
       "carrier": "UPS",
       "destination_country": "United States",
       "note": "Delivered at correct weight; billed weight on file is higher than the shipped weight - matches the customer's overcharge claim."
+    },
+    "ORD-77500": {
+      "status": "delivered",
+      "last_scan": "2 days ago",
+      "carrier": "DHL",
+      "destination_country": "United Kingdom",
+      "note": "Delivered on time - no shipment issue on file."
+    },
+    "ORD-91200": {
+      "status": "in_transit",
+      "last_scan": "1 day ago",
+      "carrier": "FedEx",
+      "destination_country": "Canada",
+      "note": "On schedule - no shipment issue on file."
     }
   },
   "accounts": {
@@ -41,6 +55,18 @@
       "account_age_months": 8,
       "prior_tickets_last_90_days": 0,
       "arr_band": "under_5k"
+    },
+    "ORD-77500": {
+      "plan_tier": "Enterprise",
+      "account_age_months": 26,
+      "prior_tickets_last_90_days": 2,
+      "arr_band": "25k_to_100k"
+    },
+    "ORD-91200": {
+      "plan_tier": "Enterprise",
+      "account_age_months": 41,
+      "prior_tickets_last_90_days": 5,
+      "arr_band": "100k_plus"
     }
   }
 }

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>AI Triage - Routing Results</title>
+<style>
+:root { color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; padding: 24px; font-size: 13px; line-height: 1.5; }
+h1 { font-size: 20px; font-weight: 600; color: #f8fafc; margin-bottom: 6px; }
+.subtitle { font-size: 13px; color: #64748b; margin-bottom: 22px; }
+
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.stat { background: #1a1d2e; border: 1px solid #2d3149; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 96px; flex: 1; }
+.stat .sv { font-size: 18px; font-weight: 700; color: var(--col, #f8fafc); }
+.stat .sl { font-size: 10px; color: #64748b; margin-top: 3px; }
+
+.filter-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; padding: 12px 14px; background: #141628; border: 1px solid #2d3149; border-radius: 8px; }
+.filter-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; margin-right: 4px; white-space: nowrap; }
+.fbtn { padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid #334155; background: #1a1d2e; color: #475569; transition: all 0.15s; }
+.fbtn.active { background: var(--bg); border-color: var(--bdr); color: var(--col); }
+.fbtn:hover { opacity: 0.85; }
+.row-hint { font-size: 10px; color: #475569; margin-left: auto; white-space: nowrap; }
+
+.divider { margin: 26px 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #475569; display: flex; align-items: center; gap: 8px; }
+.divider::after { content: ''; flex: 1; height: 1px; background: #2d3148; }
+
+.pipeline { display: flex; flex-direction: column; gap: 10px; }
+.card { background: #1e2130; border: 1px solid #2d3148; border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
+.card:hover { border-color: #4a5080; }
+.card-summary { padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.avatar { width: 32px; height: 32px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; background: var(--bg); color: var(--col); border: 1px solid var(--bdr); }
+.card-body { flex: 1; min-width: 0; }
+.card-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+.msg-id { font-family: ui-monospace, monospace; color: #64748b; font-size: 11px; }
+.msg-snip { font-size: 12px; color: #94a3b8; flex: 1; min-width: 160px; }
+.header-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
+.badge { font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; background: var(--bg); color: var(--col); border: 1px solid var(--bdr); }
+.badge-gray { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid #334155; }
+.badge-mismatch { background: rgba(239,68,68,0.12); color: #fca5a5; border: 1px solid #7f1d1d; }
+.tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin: 1px; background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid #334155; }
+.tag.flag { background: rgba(251,191,36,0.08); color: #fbbf24; border-color: #7c2d12; }
+.gt-line { font-size: 11px; color: #64748b; }
+.gt-line b { color: #cbd5e1; font-weight: 500; }
+
+.detail { display: none; border-top: 1px solid #2d3148; padding: 18px 20px; background: #171924; }
+.detail.open { display: block; }
+.detail h3 { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.07em; margin: 16px 0 8px; }
+.detail h3:first-child { margin-top: 0; }
+.detail p { font-size: 12px; color: #94a3b8; line-height: 1.6; margin-bottom: 6px; }
+.dl { display: flex; gap: 8px; font-size: 12px; padding: 3px 0; }
+.dl .k { color: #64748b; min-width: 130px; flex-shrink: 0; }
+.dl .v { color: #cbd5e1; }
+.rubric { font-family: ui-monospace, monospace; font-size: 11px; padding: 2px 0; }
+.rubric.pos { color: #6ee7a0; }
+.rubric.neg { color: #fb923c; }
+.quote { background: #1e2130; border-left: 2px solid #3b82f6; border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #cbd5e1; line-height: 1.6; margin: 4px 0 10px; }
+.quote.agent { border-left-color: #a78bfa; }
+.reasoning { font-style: italic; color: #64748b; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>AI triage - routing results</h1>
+<p class="subtitle">Source: run_20260706T183153Z_routing_fix_check.json &middot; click any row to expand full reasoning, draft, and confidence rubric</p>
+
+<div class="stats"><div class="stat"><div class="sv">4/4</div><div class="sl">scored / total</div></div><div class="stat" style="--col:#34d399"><div class="sv">75.0%</div><div class="sl">accuracy</div></div><div class="stat" style="--col:#60a5fa"><div class="sv">$0.059</div><div class="sl">total cost</div></div><div class="stat"><div class="sv">H:1 M:0 L:3</div><div class="sl">confidence bands</div></div><div class="stat" style="--col:#34d399"><div class="sv">0/0</div><div class="sl">sensitive-topic recall</div></div><div class="stat" style="--col:#34d399"><div class="sv">0/0</div><div class="sl">sensitive false positives</div></div><div class="stat" style="--col:#34d399"><div class="sv">3/3</div><div class="sl">retention-risk recall</div></div><div class="stat" style="--col:#fbbf24"><div class="sv">1</div><div class="sl">manager triage</div></div><div class="stat" style="--col:#f87171"><div class="sv">3</div><div class="sl">urgent review</div></div></div>
+
+<div class="filter-bar">
+  <span class="filter-label">Show</span>
+  <button class="fbtn active" data-cat="all" style="--col:#e2e8f0;--bg:#1a1d2e;--bdr:#334155" onclick="toggleFilter(this)">All</button><button class="fbtn active" data-cat="Service" style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a" onclick="toggleFilter(this)">Service</button><button class="fbtn active" data-cat="Success" style="--col:#34d399;--bg:#052e16;--bdr:#065f46" onclick="toggleFilter(this)">Success</button><button class="fbtn active" data-cat="Sales" style="--col:#c4b5fd;--bg:#1e1533;--bdr:#4c1d95" onclick="toggleFilter(this)">Sales</button><button class="fbtn active" data-cat="Team Lead Triage" style="--col:#fbbf24;--bg:#2a1500;--bdr:#7c2d12" onclick="toggleFilter(this)">Team Lead triage</button><button class="fbtn" data-cat="urgent" style="--col:#f87171;--bg:#350a0a;--bdr:#991b1b" onclick="toggleFilter(this)">Urgent only</button>
+  <span class="row-hint" id="row-hint"></span>
+</div>
+
+<div class="pipeline" id="pipeline">
+<div class="card" data-queue="Service" data-urgent="1">
+    <div class="card-summary" onclick="toggleCard(0)">
+      <div class="avatar" style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a">S</div>
+      <div class="card-body">
+        <div class="card-header">
+          <span class="msg-id">routing_001</span>
+          <span class="msg-snip">We&#x27;d like to close our account - order #ORD-77500 - after weighing up our options over the...</span>
+          <div class="header-right"><span class="badge " style="--col:#f87171;--bg:#350a0a;--bdr:#991b1b">low (35)</span><span class="badge " style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a">Service</span><span class="badge badge-mismatch">urgent</span></div>
+        </div>
+        <span class="gt-line">Ground truth <b>Service</b> &rarr; predicted <b>Service</b></span>
+        <div style="margin-top:4px"><span class="tag">Success</span><span class="tag">Support</span></div>
+      </div>
+    </div>
+    <div class="detail" id="detail-0">
+      <h3>Full message</h3>
+      <p>We&#x27;d like to close our account - order #ORD-77500 - after weighing up our options over the last few weeks.</p>
+      <p class="reasoning">"The message explicitly requests to close the account, which is a retention-risk signal and typically routed through Service for account management. While the tone is calm and deliberate (&#x27;weighing up options&#x27;), the intent to leave is unambiguous, making this a high-urgency account closure that requires immediate retention or offboarding handling."</p>
+
+      <h3>Extraction</h3>
+      <div class="dl"><span class="k">Category alternatives</span><span class="v">Success</span></div><div class="dl"><span class="k">Contradictory signals</span><span class="v">False</span></div><div class="dl"><span class="k">Account/order reference</span><span class="v">ORD-77500</span></div><div class="dl"><span class="k">Issue type</span><span class="v">account closure request</span></div><div class="dl"><span class="k">Sentiment / urgency</span><span class="v">neutral / high</span></div><div class="dl"><span class="k">Expansion intent</span><span class="v">False</span></div><div class="dl"><span class="k">Retention risk language</span><span class="v">True</span></div><div class="dl"><span class="k">Sensitive topic flags</span><span class="v">none</span></div><div class="dl"><span class="k">Entry channel</span><span class="v">Support</span></div>
+
+      <h3>Confidence rubric</h3>
+      <div class="rubric pos">+35 account/order reference present</div><div class="rubric pos">+15 sentiment/urgency stated unambiguously</div><div class="rubric neg">-15 multiple categories plausible</div>
+      <div class="dl" style="margin-top:6px"><span class="k">Final score / band</span><span class="v">35 / low</span></div>
+
+      <h3>Routing</h3>
+      <div class="dl"><span class="k">Queue</span><span class="v">Service</span></div>
+      <div class="dl"><span class="k">Looped in</span><span class="v">Success</span></div>
+      <div class="dl"><span class="k">Guardrail flags</span><span class="v"><span class="tag flag">formal_close_cancel_support_owned</span><span class="tag flag">large_account_retention_loop_in</span><span class="tag flag">looped_in:Success</span><span class="tag flag">low_confidence_human_review</span></span></div>
+      <div class="dl"><span class="k">Cost (this message)</span><span class="v">$0.017931</span></div>
+
+      <h3>Draft reply</h3>
+      <div class="quote">Subject: Re: Closing your account<br><br>Hi there,<br><br>Thanks for letting us know, and for giving it real thought before deciding. We can close the account tied to order #ORD-77500 - to confirm the closure, can you reply with the email address on file and confirm you&#x27;d like all associated data removed as well?<br><br>Once we have that, we&#x27;ll process the closure and send you confirmation.<br><br>Best,<br>The Example Co. Team</div>
+      <h3>Agent investigation (agentic - only runs on low confidence)</h3><div class="quote agent">**Summary for reviewer:** ORD-77500 corresponds to a delivered shipment (no logistics issue), tied to an Enterprise account, 26 months tenure, ARR band 25k–100k, with 2 prior tickets in the last 90 days. This is a churn/retention request, not a shipping complaint — recommend routing to account management/customer success for a save attempt or offboarding process rather than support/logistics, given the account&#x27;s value and tenure.</div>
+    </div></div><div class="card" data-queue="Service" data-urgent="1">
+    <div class="card-summary" onclick="toggleCard(1)">
+      <div class="avatar" style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a">S</div>
+      <div class="card-body">
+        <div class="card-header">
+          <span class="msg-id">routing_002</span>
+          <span class="msg-snip">We&#x27;d like to close our account - order #ORD-88213 - after weighing up our options over the...</span>
+          <div class="header-right"><span class="badge " style="--col:#f87171;--bg:#350a0a;--bdr:#991b1b">low (35)</span><span class="badge " style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a">Service</span><span class="badge badge-mismatch">urgent</span></div>
+        </div>
+        <span class="gt-line">Ground truth <b>Service</b> &rarr; predicted <b>Service</b></span>
+        <div style="margin-top:4px"><span class="tag">Success</span><span class="tag">Support</span></div>
+      </div>
+    </div>
+    <div class="detail" id="detail-1">
+      <h3>Full message</h3>
+      <p>We&#x27;d like to close our account - order #ORD-88213 - after weighing up our options over the last few weeks.</p>
+      <p class="reasoning">"The message explicitly requests to close the account, which is a retention-risk signal and typically routed through Service for account management. While the tone is calm and deliberate (&#x27;weighing up options&#x27;), the intent to leave is unambiguous, triggering retention_risk_language=true. Success is a plausible alternative because account closures sometimes warrant a retention conversation, but the explicit closure request makes Service the primary category."</p>
+
+      <h3>Extraction</h3>
+      <div class="dl"><span class="k">Category alternatives</span><span class="v">Success</span></div><div class="dl"><span class="k">Contradictory signals</span><span class="v">False</span></div><div class="dl"><span class="k">Account/order reference</span><span class="v">ORD-88213</span></div><div class="dl"><span class="k">Issue type</span><span class="v">account closure request</span></div><div class="dl"><span class="k">Sentiment / urgency</span><span class="v">neutral / high</span></div><div class="dl"><span class="k">Expansion intent</span><span class="v">False</span></div><div class="dl"><span class="k">Retention risk language</span><span class="v">True</span></div><div class="dl"><span class="k">Sensitive topic flags</span><span class="v">none</span></div><div class="dl"><span class="k">Entry channel</span><span class="v">Support</span></div>
+
+      <h3>Confidence rubric</h3>
+      <div class="rubric pos">+35 account/order reference present</div><div class="rubric pos">+15 sentiment/urgency stated unambiguously</div><div class="rubric neg">-15 multiple categories plausible</div>
+      <div class="dl" style="margin-top:6px"><span class="k">Final score / band</span><span class="v">35 / low</span></div>
+
+      <h3>Routing</h3>
+      <div class="dl"><span class="k">Queue</span><span class="v">Service</span></div>
+      <div class="dl"><span class="k">Looped in</span><span class="v">Success</span></div>
+      <div class="dl"><span class="k">Guardrail flags</span><span class="v"><span class="tag flag">formal_close_cancel_support_owned</span><span class="tag flag">looped_in:Success</span><span class="tag flag">low_confidence_human_review</span></span></div>
+      <div class="dl"><span class="k">Cost (this message)</span><span class="v">$0.018569</span></div>
+
+      <h3>Draft reply</h3>
+      <div class="quote">Subject: Re: Account closure request<br><br>Hi there,<br><br>Thanks for letting us know, and for giving it real thought before deciding. We can close the account tied to order #ORD-88213 - to confirm this is the right one, can you verify the email address or name on the account?<br><br>Once we have that, we&#x27;ll process the closure and send confirmation when it&#x27;s done.<br><br>Best,<br>The Example Co. Team</div>
+      <h3>Agent investigation (agentic - only runs on low confidence)</h3><div class="quote agent">Note for reviewer: ORD-88213 is a valid reference tied to a Plus-tier account (14 months old, under 5k ARR, only 1 prior ticket in 90 days) — no sign of a chronic complainer. However, the tracking data reveals a likely root cause the customer didn&#x27;t mention: their DHL shipment to Germany has been stuck with no scan update for 9 days, which may be the real driver behind the &quot;closing account&quot; request rather than a pure churn decision. Recommend addressing the stalled shipment/offering resolution before processing the account closure, in case this is a save opportunity.</div>
+    </div></div><div class="card" data-queue="Service" data-urgent="0">
+    <div class="card-summary" onclick="toggleCard(2)">
+      <div class="avatar" style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a">S</div>
+      <div class="card-body">
+        <div class="card-header">
+          <span class="msg-id">routing_003</span>
+          <span class="msg-snip">Please cancel this shipment, order #ORD-91200, we no longer need it sent.</span>
+          <div class="header-right"><span class="badge " style="--col:#34d399;--bg:#052e16;--bdr:#065f46">high (100)</span><span class="badge " style="--col:#60a5fa;--bg:#0b1e3f;--bdr:#1e3a8a">Service</span></div>
+        </div>
+        <span class="gt-line">Ground truth <b>Service</b> &rarr; predicted <b>Service</b></span>
+        <div style="margin-top:4px"><span class="tag">Success</span><span class="tag">Support</span></div>
+      </div>
+    </div>
+    <div class="detail" id="detail-2">
+      <h3>Full message</h3>
+      <p>Please cancel this shipment, order #ORD-91200, we no longer need it sent.</p>
+      <p class="reasoning">"This is a Service request to cancel a shipment, but the explicit &#x27;cancel shipment&#x27; language triggers retention_risk_language=true per the guidelines, ensuring it routes to retention-aware handling even though the core issue is a logistics action (cancellation) rather than a complaint or account closure threat."</p>
+
+      <h3>Extraction</h3>
+      <div class="dl"><span class="k">Category alternatives</span><span class="v">none</span></div><div class="dl"><span class="k">Contradictory signals</span><span class="v">False</span></div><div class="dl"><span class="k">Account/order reference</span><span class="v">ORD-91200</span></div><div class="dl"><span class="k">Issue type</span><span class="v">cancel shipment request</span></div><div class="dl"><span class="k">Sentiment / urgency</span><span class="v">neutral / high</span></div><div class="dl"><span class="k">Expansion intent</span><span class="v">False</span></div><div class="dl"><span class="k">Retention risk language</span><span class="v">True</span></div><div class="dl"><span class="k">Sensitive topic flags</span><span class="v">none</span></div><div class="dl"><span class="k">Entry channel</span><span class="v">Support</span></div>
+
+      <h3>Confidence rubric</h3>
+      <div class="rubric pos">+35 account/order reference present</div><div class="rubric pos">+35 single fitting category, no hedging</div><div class="rubric pos">+15 category-specific terminology matched</div><div class="rubric pos">+15 sentiment/urgency stated unambiguously</div>
+      <div class="dl" style="margin-top:6px"><span class="k">Final score / band</span><span class="v">100 / high</span></div>
+
+      <h3>Routing</h3>
+      <div class="dl"><span class="k">Queue</span><span class="v">Service</span></div>
+      <div class="dl"><span class="k">Looped in</span><span class="v">Success</span></div>
+      <div class="dl"><span class="k">Guardrail flags</span><span class="v"><span class="tag flag">formal_close_cancel_support_owned</span><span class="tag flag">large_account_retention_loop_in</span><span class="tag flag">looped_in:Success</span></span></div>
+      <div class="dl"><span class="k">Cost (this message)</span><span class="v">$0.007603</span></div>
+
+      <h3>Draft reply</h3>
+      <div class="quote">Subject: Re: Cancel shipment for order #ORD-91200<br><br>Hi there,<br><br>We&#x27;ve stopped shipment on order #ORD-91200 so it won&#x27;t go out. If a refund is due, it&#x27;ll process back to your original payment method within 3-5 business days, and we&#x27;ll send a confirmation once that&#x27;s done.<br><br>Let us know if there&#x27;s anything else you need adjusted on this order.<br><br>Best,<br>The Example Co. Team</div>
+      
+    </div></div><div class="card" data-queue="Team Lead Triage" data-urgent="1">
+    <div class="card-summary" onclick="toggleCard(3)">
+      <div class="avatar" style="--col:#fbbf24;--bg:#2a1500;--bdr:#7c2d12">T</div>
+      <div class="card-body">
+        <div class="card-header">
+          <span class="msg-id">routing_004</span>
+          <span class="msg-snip">Our shipments have been slower to arrive than usual lately, and separately we wanted to ch...</span>
+          <div class="header-right"><span class="badge " style="--col:#f87171;--bg:#350a0a;--bdr:#991b1b">low (15)</span><span class="badge " style="--col:#fbbf24;--bg:#2a1500;--bdr:#7c2d12">Team Lead Triage</span><span class="badge badge-mismatch">mismatch</span><span class="badge badge-mismatch">urgent</span></div>
+        </div>
+        <span class="gt-line">Ground truth <b>Service</b> &rarr; predicted <b>Success</b></span>
+        <div style="margin-top:4px"><span class="tag">Service</span><span class="tag">Success</span><span class="tag">Support</span></div>
+      </div>
+    </div>
+    <div class="detail" id="detail-3">
+      <h3>Full message</h3>
+      <p>Our shipments have been slower to arrive than usual lately, and separately we wanted to check in on how our account is doing overall and what we should be thinking about as we plan for next quarter.</p>
+      <p class="reasoning">"The primary intent is a business review and forward-looking planning conversation (&#x27;check in on how our account is doing&#x27;, &#x27;plan for next quarter&#x27;), which is a classic Success use case. The slower shipments are mentioned as a secondary operational note, not the main ask. The language about planning ahead suggests an existing customer thinking about growth and optimization."</p>
+
+      <h3>Extraction</h3>
+      <div class="dl"><span class="k">Category alternatives</span><span class="v">Service</span></div><div class="dl"><span class="k">Contradictory signals</span><span class="v">False</span></div><div class="dl"><span class="k">Account/order reference</span><span class="v">none</span></div><div class="dl"><span class="k">Issue type</span><span class="v">account review and quarterly planning</span></div><div class="dl"><span class="k">Sentiment / urgency</span><span class="v">neutral / medium</span></div><div class="dl"><span class="k">Expansion intent</span><span class="v">True</span></div><div class="dl"><span class="k">Retention risk language</span><span class="v">False</span></div><div class="dl"><span class="k">Sensitive topic flags</span><span class="v">none</span></div><div class="dl"><span class="k">Entry channel</span><span class="v">Support</span></div>
+
+      <h3>Confidence rubric</h3>
+      <div class="rubric pos">+15 category-specific terminology matched</div><div class="rubric pos">+15 sentiment/urgency stated unambiguously</div><div class="rubric neg">-15 multiple categories plausible</div>
+      <div class="dl" style="margin-top:6px"><span class="k">Final score / band</span><span class="v">15 / low</span></div>
+
+      <h3>Routing</h3>
+      <div class="dl"><span class="k">Queue</span><span class="v">Team Lead Triage</span></div>
+      <div class="dl"><span class="k">Looped in</span><span class="v">Service, Success</span></div>
+      <div class="dl"><span class="k">Guardrail flags</span><span class="v"><span class="tag flag">team_lead_triage_low_confidence_floor</span><span class="tag flag">looped_in:Service,Success</span><span class="tag flag">low_confidence_human_review</span></span></div>
+      <div class="dl"><span class="k">Cost (this message)</span><span class="v">$0.014770</span></div>
+
+      <h3>Draft reply</h3>
+      <div class="quote">Subject: Re: Account review and Q planning<br><br>Hi there,<br><br>Slower shipments are frustrating, especially when you&#x27;re trying to plan ahead, and we&#x27;ll get that piece looked at separately by the shipping team. On the account review and quarterly planning side, we&#x27;d like to pull together a full picture of your usage and trends before we talk next steps.<br><br>Can you let us know a few times that work this week for a quick call? We&#x27;ll come prepared with account data and some thoughts on what to plan for next quarter.<br><br>Best,<br>The Example Co. Team<br><br>---<br><br>*Draft note: queue assignment unconfirmed, pending team lead review, treat as best guess.*</div>
+      <h3>Agent investigation (agentic - only runs on low confidence)</h3><div class="quote agent">This message contains no order or account reference at all — the customer is speaking generally about &quot;shipments&quot; and &quot;our account&quot; without citing any specific order number or ID. Since both lookup tools require an actual reference from the message, and I&#x27;d only be guessing if I tried to supply one, I won&#x27;t call either tool here.
+
+**Note for reviewer:** No usable reference was found in this message, so no lookups were performed. This appears to be a general relationship/account-health check-in (slower shipments overall + quarterly planning) rather than a specific order issue — likely best routed to an account manager or CSM who can pull up the account directly, rather than handled via order-tracking tools.</div>
+    </div></div>
+</div>
+
+<script>
+function toggleCard(idx) {
+  var d = document.getElementById('detail-' + idx);
+  d.classList.toggle('open');
+}
+(function() {
+  var btns = document.querySelectorAll('.fbtn');
+  var queueBtns = document.querySelectorAll('.fbtn[data-cat]:not([data-cat="all"]):not([data-cat="urgent"])');
+  var urgentBtn = document.querySelector('.fbtn[data-cat="urgent"]');
+
+  window.toggleFilter = function(btn) {
+    var cat = btn.dataset.cat;
+    if (cat === 'all') {
+      queueBtns.forEach(function(b) { b.classList.add('active'); });
+      urgentBtn.classList.remove('active');
+    } else {
+      btn.classList.toggle('active');
+    }
+    applyFilters();
+  };
+
+  function applyFilters() {
+    var activeQueues = [];
+    var urgentOnly = false;
+    btns.forEach(function(b) {
+      if (b.classList.contains('active')) {
+        if (b.dataset.cat === 'urgent') urgentOnly = true;
+        else if (b.dataset.cat !== 'all') activeQueues.push(b.dataset.cat);
+      }
+    });
+    var cards = document.querySelectorAll('#pipeline .card');
+    var shown = 0;
+    cards.forEach(function(c) {
+      var matchQueue = activeQueues.length === 0 || activeQueues.indexOf(c.dataset.queue) !== -1;
+      var matchUrgent = !urgentOnly || c.dataset.urgent === '1';
+      var visible = matchQueue && matchUrgent;
+      c.style.display = visible ? '' : 'none';
+      if (visible) shown++;
+    });
+    document.getElementById('row-hint').textContent = shown + ' of ' + cards.length + ' shown';
+  }
+  applyFilters();
+})();
+</script>
+</body>
+</html>

@@ -8,12 +8,18 @@ values used at demo time.
 """
 
 import json
+import re
 from pathlib import Path
 
 import anthropic
 
 BRAND_GUIDELINES_PATH = Path(__file__).parent / "data" / "brand_guidelines.json"
 MOCK_BACKEND_PATH = Path(__file__).parent / "data" / "mock_backend.json"
+REFERENCE_CONTENT_PATHS = {
+    "Service": Path(__file__).parent / "data" / "help_centre_articles.json",
+    "Success": Path(__file__).parent / "data" / "success_playbook.json",
+    "Sales": Path(__file__).parent / "data" / "sales_playbook.json",
+}
 
 
 def load_brand_guidelines():
@@ -38,6 +44,52 @@ def load_mock_backend():
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {"orders": {}, "accounts": {}}
+
+
+def load_reference_content(queue):
+    """Read fresh on every call, same pattern as load_brand_guidelines -
+    a mock stand-in for a real Help Centre (Service) or team playbook
+    (Success/Sales) search. This is deliberately a plain, lightweight
+    tagged list matched by keyword overlap, not a vector index or model
+    call - retrieval-grounded drafting doesn't need to be expensive, and
+    demonstrating that cheaply here is the point. Team Lead Triage has no
+    dedicated reference content (its category is itself unconfirmed)."""
+    path = REFERENCE_CONTENT_PATHS.get(queue)
+    if not path:
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("articles", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def find_matching_article(extraction, queue, min_overlap=1):
+    """Rule-based retrieval: score every article in the queue's reference
+    content by keyword overlap against the message's matched_keywords and
+    issue_type, return the best match if it clears min_overlap. No LLM
+    call - this is plain Python so a "was a real match used" signal can
+    feed the draft-quality confidence score (see score_draft_confidence)
+    without paying for a second model judgement about its own answer."""
+    articles = load_reference_content(queue)
+    if not articles:
+        return None
+
+    haystack_terms = set(t.lower() for t in extraction.get("matched_keywords", []))
+    issue_words = set(extraction.get("issue_type", "").lower().split())
+    haystack_terms |= issue_words
+
+    best, best_score = None, 0
+    for article in articles:
+        tags = set(t.lower() for t in article.get("tags", []))
+        score = 0
+        for term in haystack_terms:
+            if any(term in tag or tag in term for tag in tags):
+                score += 1
+        if score > best_score:
+            best, best_score = article, score
+
+    return best if best_score >= min_overlap else None
 
 
 INVESTIGATION_TOOLS = [
@@ -76,10 +128,48 @@ INVESTIGATION_TOOLS = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "search_help_centre",
+        "description": (
+            "Search the Help Centre knowledge base by free-text query "
+            "(e.g. 'customs hold', 'duplicate charge'). Returns the "
+            "best-matching article's title and answer, or not_found if "
+            "nothing matches well enough. Use this to check whether a "
+            "known, documented answer already exists for what the "
+            "customer is describing - not for account-specific data (use "
+            "the other two tools for that)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "A short free-text description of the issue to search for"},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
+def _search_articles_by_text(query, articles):
+    query_words = set(query.lower().split())
+    best, best_score = None, 0
+    for article in articles:
+        tags = set(t.lower() for t in article.get("tags", []))
+        score = sum(1 for w in query_words if any(w in tag or tag in w for tag in tags))
+        if score > best_score:
+            best, best_score = article, score
+    return best if best_score >= 1 else None
+
+
 def _execute_investigation_tool(tool_name, tool_input, backend):
+    if tool_name == "search_help_centre":
+        articles = load_reference_content("Service")
+        match = _search_articles_by_text(tool_input.get("query", ""), articles)
+        if not match:
+            return json.dumps({"status": "not_found"})
+        return json.dumps({"title": match["title"], "answer": match["answer"]})
+
     ref = tool_input.get("order_reference", "")
     if tool_name == "lookup_order_status":
         record = backend.get("orders", {}).get(ref)
@@ -105,14 +195,16 @@ def investigate_uncertain_message(client, message_text, extraction, config, max_
     backend = load_mock_backend()
     system_prompt = (
         "You are helping a human support reviewer triage an uncertain "
-        "customer message. You have two read-only lookup tools available. "
-        "Decide for yourself whether either is worth calling, based on "
-        "what the message actually contains - do not call a tool with a "
-        "reference you are guessing at or inventing. If the message has "
-        "no usable reference, say so plainly rather than calling a tool "
-        "anyway. When you are done, write a short (2-3 sentence) note for "
-        "the human reviewer summarising what you found and what it means "
-        "for handling this message."
+        "customer message. You have three read-only tools available: two "
+        "account/order lookups and a Help Centre search. Decide for "
+        "yourself which, if any, are worth calling, based on what the "
+        "message actually contains - do not call a lookup tool with a "
+        "reference you are guessing at or inventing, and do not search "
+        "the Help Centre with a query unrelated to what's actually being "
+        "asked. If the message has no usable reference, say so plainly "
+        "rather than calling a tool anyway. When you are done, write a "
+        "short (2-3 sentence) note for the human reviewer summarising "
+        "what you found and what it means for handling this message."
     )
     messages = [{
         "role": "user",
@@ -199,6 +291,11 @@ EXTRACTION_SCHEMA = {
             "type": "boolean",
             "description": "True if the message explicitly asks to close or cancel the account, cancel a shipment, or contains language threatening or seriously considering leaving/switching away from the company - even if phrased as frustration rather than a formal request.",
         },
+        "shipment_volume_band": {
+            "type": "string",
+            "enum": ["under_100", "100_to_1000", "1000_to_5000", "5000_to_10000", "10000_plus", "unknown"],
+            "description": "Only relevant for Sales-category messages, mirroring the real Sales/Contact form's 'Approx. Shipments per Month or Total Orders' field. Set this from an explicit or clearly-implied volume the customer states (e.g. 'we ship about 300 orders a month' -> 100_to_1000). 'unknown' if no volume is stated or implied - do not guess a band from vague language like 'a lot' or 'growing fast' alone.",
+        },
         "sensitive_topic_flags": {
             "type": "array",
             "items": {"type": "string"},
@@ -221,7 +318,7 @@ EXTRACTION_SCHEMA = {
     "required": [
         "category", "category_alternatives", "contradictory_signals",
         "account_or_order_reference", "issue_type", "sentiment", "urgency",
-        "expansion_intent_language", "retention_risk_language",
+        "expansion_intent_language", "retention_risk_language", "shipment_volume_band",
         "sensitive_topic_flags", "matched_keywords", "message_length_words", "reasoning",
     ],
     "additionalProperties": False,
@@ -297,6 +394,15 @@ def classify_and_extract(client, message_text, config, entry_channel=None):
         f"but no leaving/switching language). Example that SHOULD be "
         f"flagged: 'if this keeps happening we'll have to look at other "
         f"providers' (soft but real switching language).\n\n"
+        f"shipment_volume_band only matters for Sales-category messages, "
+        f"mirroring the real Sales/Contact form's 'Approx. Shipments per "
+        f"Month or Total Orders' field: under_100, 100_to_1000, "
+        f"1000_to_5000, 5000_to_10000, 10000_plus, or unknown. Set it from "
+        f"an explicit or clearly-implied stated volume (e.g. 'we ship "
+        f"about 300 orders a month' -> 100_to_1000, 'we do around 8,000 "
+        f"shipments monthly' -> 5000_to_10000). Use 'unknown' whenever no "
+        f"volume is stated or clearly implied - do not infer a band from "
+        f"vague language like 'a lot' or 'growing fast' alone.\n\n"
         f"sensitive_topic_flags is a NARROW field. Only use terms from this "
         f"exact list, and only when clearly present: {sensitive_topics_line}. "
         f"Match the FULL concept, not a substring - the word 'customs' "
@@ -442,12 +548,28 @@ def score_confidence(extraction, config):
     return {"score": score, "band": band, "reasons": reasons}
 
 
-def determine_queue(extraction, confidence, config=None):
+def is_large_account(extraction, config, backend):
+    """Deterministic, rule-based account-size check (no API call) - reads
+    the same mock_backend.json account records the agentic investigation
+    tool can look up, but this lookup always runs, whereas that tool only
+    fires for low-confidence messages. Used to decide whether Success
+    gets looped in on account-lifecycle requests (see determine_queue),
+    not to gate anything else."""
+    ref = extraction.get("account_or_order_reference") or ""
+    account = backend.get("accounts", {}).get(ref)
+    if not account:
+        return False
+    return account.get("arr_band") in config.get("large_account_arr_bands", [])
+
+
+def determine_queue(extraction, confidence, config=None, message_text=None, backend=None):
     """Guardrail routing: sensitive topics and retention risk override
-    the raw category; contradictory signals escalate to Success; very
-    low confidence routes to a 4th Team Lead Triage queue for manual
-    assignment rather than guessing a category queue; low confidence
-    (more broadly) routes to human review regardless of category.
+    the raw category; contradictory signals escalate to Team Lead Triage
+    (a Support-side escalation point, not an automatic hand-off to
+    Success - see below); very low confidence routes to the same Team
+    Lead Triage queue for manual assignment rather than guessing a
+    category queue; low confidence (more broadly) routes to human review
+    regardless of category.
 
     Sensitive-topic and retention-risk overrides are unconditional -
     they win even when confidence is at the Team Lead Triage floor, since
@@ -456,6 +578,31 @@ def determine_queue(extraction, confidence, config=None):
     guardrail fired, but the raw category guess itself is too weak to
     trust (see config's team_lead_triage_confidence_floor for how the
     threshold was chosen).
+
+    Contradictory signals do NOT default to Success. A message pulling
+    toward two categories at once (e.g. a technical issue mixed with an
+    expansion mention) is a Support-side escalation, not automatically a
+    Success one - defaulting every ambiguous case to Success would make
+    Success a dumping ground for technical escalations and turn it
+    reactive instead of proactive. It routes to Team Lead Triage instead;
+    Success is looped in via the ordinary content-driven signals below
+    (an expansion mention, a Success category alternative) exactly as it
+    would be for any other queue, not because the signals were merely
+    contradictory.
+
+    Formal close/cancel requests are a distinct case from softer
+    retention-risk language. "Close Account" and "Cancel a Shipment" are
+    2 of the 8 real Help Centre support-form categories - a routine
+    account-lifecycle action a customer explicitly requested through the
+    Support channel, not necessarily an active relationship conversation.
+    Support keeps ownership by default; Success is looped in as secondary
+    only when the account is large (see is_large_account) - the retention
+    stakes are high enough there to warrant proactive visibility, without
+    making Success own every account closure/cancellation regardless of
+    size. Softer retention language (e.g. "we'll have to look at other
+    providers") is NOT a formal request and keeps the existing behavior:
+    Success owns directly, since that genuinely is a relationship
+    conversation, not routine account admin.
 
     Multi-team loop-in: some messages need more than one
     team's awareness at once (a real support issue, a retention risk,
@@ -469,20 +616,35 @@ def determine_queue(extraction, confidence, config=None):
     multiple simultaneous needs."""
     guardrail_flags = []
     config = config or {}
+    backend = backend if backend is not None else load_mock_backend()
 
     is_sensitive = bool(extraction["sensitive_topic_flags"])
     is_retention_risk = extraction["retention_risk_language"]
     triage_floor = config.get("team_lead_triage_confidence_floor", -1)
+    large_account = is_large_account(extraction, config, backend)
+
+    is_formal_close_cancel = False
+    if message_text:
+        text_lower = message_text.lower()
+        is_formal_close_cancel = any(
+            re.search(pattern, text_lower)
+            for pattern in config.get("formal_close_cancel_patterns", [])
+        )
 
     if is_sensitive:
         queue = "Service"
         guardrail_flags.append("sensitive_topic_always_service")
+    elif is_retention_risk and is_formal_close_cancel:
+        queue = "Service"
+        guardrail_flags.append("formal_close_cancel_support_owned")
+        if large_account:
+            guardrail_flags.append("large_account_retention_loop_in")
     elif is_retention_risk:
         queue = "Success"
         guardrail_flags.append("retention_risk_override_to_success")
     elif extraction["contradictory_signals"]:
-        queue = "Success"
-        guardrail_flags.append("contradictory_signals_escalated_to_success")
+        queue = "Team Lead Triage"
+        guardrail_flags.append("contradictory_signals_escalated_to_team_lead_triage")
     elif confidence["score"] <= triage_floor:
         queue = "Team Lead Triage"
         guardrail_flags.append("team_lead_triage_low_confidence_floor")
@@ -495,12 +657,17 @@ def determine_queue(extraction, confidence, config=None):
         # Ownership moved away from the raw category via a guardrail
         # override (retention risk, contradiction) - the underlying need
         # (e.g. a real shipment problem) is still real and must not be
-        # lost just because Success now owns the conversation.
+        # lost just because another team now owns the conversation.
         loop_in.append(underlying_category)
     if is_retention_risk and queue != "Success":
-        # Sensitive topic took precedence for ownership, but Success
-        # still needs visibility into the retention risk.
-        loop_in.append("Success")
+        if is_formal_close_cancel:
+            if large_account:
+                loop_in.append("Success")
+            # else: routine account admin on a normal-sized account - no
+            # Success loop-in, so Success isn't pulled into every close/
+            # cancel request regardless of size.
+        else:
+            loop_in.append("Success")
     if extraction["expansion_intent_language"] and queue != "Success":
         loop_in.append("Success")
     for alt in extraction["category_alternatives"]:
@@ -514,6 +681,23 @@ def determine_queue(extraction, confidence, config=None):
     if confidence["band"] == "low":
         guardrail_flags.append("low_confidence_human_review")
 
+    # Enterprise AE routing: a large stated shipment volume on a Sales
+    # message routes to a dedicated Enterprise AE handling path rather
+    # than standard self-serve Sales, mirroring the real Sales/Contact
+    # form's volume field. This doesn't change queue ownership (Sales
+    # still owns it) - it's a handling-path distinction within Sales, the
+    # same way Team Lead Triage is a distinction within "uncertain",
+    # not a 5th top-level queue.
+    sales_handling_path = None
+    if queue == "Sales":
+        sales_handling_path = (
+            "Enterprise AE"
+            if extraction.get("shipment_volume_band") in config.get("enterprise_ae_volume_bands", [])
+            else "Standard Sales"
+        )
+        if sales_handling_path == "Enterprise AE":
+            guardrail_flags.append("enterprise_ae_routing")
+
     # Phase-1 scope: every first message in a thread is human-approved
     # before anything is sent, regardless of confidence band. The bands
     # only affect review priority/flagging shown in the dashboard.
@@ -525,6 +709,7 @@ def determine_queue(extraction, confidence, config=None):
         "guardrail_flags": guardrail_flags,
         "review_priority": review_priority,
         "requires_human_review": True,
+        "sales_handling_path": sales_handling_path,
     }
 
 
@@ -585,6 +770,21 @@ def draft_response(client, message_text, extraction, confidence, routing, config
             f"This is a draft for human review before sending, not a final answer."
         )
 
+    matched_article = None
+    if not needs_clarification:
+        matched_article = find_matching_article(extraction, routing["queue"])
+    if matched_article:
+        reference_block = (
+            f"\n\nRelevant reference material found for this message "
+            f"(\"{matched_article['title']}\"): {matched_article['answer']}\n"
+            f"Ground your reply in this - reuse its substance in your own "
+            f"words rather than inventing an answer, but don't just paste "
+            f"it verbatim if the customer's specific situation needs a "
+            f"more tailored response."
+        )
+    else:
+        reference_block = ""
+
     brand = load_brand_guidelines()
     if brand:
         banned = ", ".join(brand.get("banned_words_or_phrases", []))
@@ -612,6 +812,7 @@ def draft_response(client, message_text, extraction, confidence, routing, config
     system_prompt = (
         f"You draft short customer-support replies for {config['company_name']}. "
         f"Keep it to 2-4 sentences unless technical detail requires more, no filler."
+        f"{reference_block}"
         f"{brand_block}"
     )
 
@@ -632,7 +833,50 @@ def draft_response(client, message_text, extraction, confidence, routing, config
         "output_tokens": response.usage.output_tokens,
         "model": config["models"]["draft"],
     }
-    return draft_text, usage, needs_clarification
+    return draft_text, usage, needs_clarification, matched_article
+
+
+def score_draft_confidence(matched_article, routing, needs_clarification):
+    """A second, distinct confidence score from score_confidence/
+    determine_queue above. That one answers "did this land in the right
+    queue" (routing confidence); this one answers "is this specific
+    draft likely good enough to send" (answer-quality confidence) -
+    explicitly not the same question, and conflating them would hide
+    that a message can be routed correctly but still get a weak,
+    unaided answer, or vice versa.
+
+    Rule-based, same philosophy as the routing score: not an LLM rating
+    the quality of its own answer, which would just be asking the model
+    to grade its own homework. The signal used instead is verifiable and
+    external to the model's own judgement: was this draft actually
+    grounded in a real, matched Help Centre/playbook article, or is it
+    the model's own generative attempt with nothing to check it against?
+    A draft that reuses known-correct source material is more likely to
+    be accurate than a fully generative one, the same way a human agent
+    who looks up the right article before replying is more likely to be
+    right than one answering from memory. This is the answer to "how do
+    you simulate draft-quality confidence without real usage data": it
+    doesn't try to - it measures whether grounding was possible at all,
+    which is honest about what this prototype can and can't verify."""
+    if needs_clarification:
+        return {
+            "band": "n/a",
+            "reason": "Draft is a clarification request, not an attempted answer - answer-quality confidence doesn't apply.",
+        }
+    if routing["queue"] == "Team Lead Triage":
+        return {
+            "band": "low",
+            "reason": "Queue itself is unconfirmed, so answer quality can't be trusted until a team lead assigns the right team.",
+        }
+    if matched_article:
+        return {
+            "band": "high",
+            "reason": f"Grounded in a matched reference article (\"{matched_article['title']}\") rather than a fully generative answer.",
+        }
+    return {
+        "band": "low",
+        "reason": "No matching reference article found for this message - this is the model's own unaided attempt, not grounded in known-correct source material. Review carefully before sending.",
+    }
 
 
 def process_message(client, message, config):
@@ -655,17 +899,20 @@ def process_message(client, message, config):
         }
 
     confidence = score_confidence(extraction, config)
-    routing = determine_queue(extraction, confidence, config)
+    routing = determine_queue(extraction, confidence, config, message_text=message["text"])
     health_flag = health_expansion_flag(extraction, routing)
 
     try:
-        draft_text, draft_usage, is_clarification = draft_response(
+        draft_text, draft_usage, is_clarification, matched_article = draft_response(
             client, message["text"], extraction, confidence, routing, config,
         )
         usage = [extract_usage, draft_usage]
+        draft_confidence = score_draft_confidence(matched_article, routing, is_clarification)
     except (anthropic.APIError, StopIteration) as e:
         draft_text = None
         is_clarification = None
+        matched_article = None
+        draft_confidence = {"band": "low", "reason": "Drafting failed - no draft was produced."}
         usage = [extract_usage]
         routing["guardrail_flags"].append(f"draft_failed:{type(e).__name__}")
 
@@ -691,9 +938,12 @@ def process_message(client, message, config):
         "guardrail_flags": routing["guardrail_flags"],
         "review_priority": routing["review_priority"],
         "requires_human_review": routing["requires_human_review"],
+        "sales_handling_path": routing["sales_handling_path"],
         "health_expansion_flag": health_flag,
         "draft": draft_text,
         "draft_is_clarification_request": is_clarification,
+        "draft_confidence": draft_confidence,
+        "matched_reference": {"id": matched_article["id"], "title": matched_article["title"]} if matched_article else None,
         "investigation_summary": investigation_summary,
         "usage": usage,
     }

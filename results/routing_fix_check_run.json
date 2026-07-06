@@ -1,0 +1,365 @@
+{
+  "stats": {
+    "n_total": 4,
+    "n_scored": 4,
+    "n_failed": 0,
+    "overall_accuracy": 0.75,
+    "confusion_matrix": {
+      "Service": {
+        "Service": 3,
+        "Success": 1,
+        "Sales": 0
+      },
+      "Success": {
+        "Service": 0,
+        "Success": 0,
+        "Sales": 0
+      },
+      "Sales": {
+        "Service": 0,
+        "Success": 0,
+        "Sales": 0
+      }
+    },
+    "per_category": {
+      "Service": {
+        "precision": 1.0,
+        "recall": 0.75,
+        "support": 4
+      },
+      "Success": {
+        "precision": 0.0,
+        "recall": null,
+        "support": 0
+      },
+      "Sales": {
+        "precision": null,
+        "recall": null,
+        "support": 0
+      }
+    },
+    "confidence_band_counts": {
+      "high": 1,
+      "medium": 0,
+      "low": 3
+    },
+    "sensitive_topic_detection": {
+      "expected": 0,
+      "caught": 0,
+      "total_flagged": 0,
+      "false_positives": 0
+    },
+    "retention_risk_detection": {
+      "expected": 3,
+      "caught": 3,
+      "total_flagged": 3,
+      "false_positives": 0
+    },
+    "total_cost_usd": 0.058873,
+    "latency_seconds": {
+      "min": 6.37,
+      "median": 15.12,
+      "p95": 17.72,
+      "max": 17.72,
+      "median_when_investigated": 15.12,
+      "max_when_investigated": 17.72
+    }
+  },
+  "results": [
+    {
+      "id": "routing_001",
+      "text": "We'd like to close our account - order #ORD-77500 - after weighing up our options over the last few weeks.",
+      "entry_channel": "Support",
+      "extraction": {
+        "category": "Service",
+        "category_alternatives": [
+          "Success"
+        ],
+        "contradictory_signals": false,
+        "account_or_order_reference": "ORD-77500",
+        "issue_type": "account closure request",
+        "sentiment": "neutral",
+        "urgency": "high",
+        "expansion_intent_language": false,
+        "retention_risk_language": true,
+        "sensitive_topic_flags": [],
+        "matched_keywords": [],
+        "message_length_words": 18,
+        "reasoning": "The message explicitly requests to close the account, which is a retention-risk signal and typically routed through Service for account management. While the tone is calm and deliberate ('weighing up options'), the intent to leave is unambiguous, making this a high-urgency account closure that requires immediate retention or offboarding handling."
+      },
+      "confidence": {
+        "score": 35,
+        "band": "low",
+        "reasons": [
+          "+35 account/order reference present",
+          "+15 sentiment/urgency stated unambiguously",
+          "-15 multiple categories plausible"
+        ]
+      },
+      "queue": "Service",
+      "loop_in": [
+        "Success"
+      ],
+      "guardrail_flags": [
+        "formal_close_cancel_support_owned",
+        "large_account_retention_loop_in",
+        "looped_in:Success",
+        "low_confidence_human_review"
+      ],
+      "review_priority": "urgent",
+      "requires_human_review": true,
+      "health_expansion_flag": null,
+      "draft": "Subject: Re: Closing your account\n\nHi there,\n\nThanks for letting us know, and for giving it real thought before deciding. We can close the account tied to order #ORD-77500 - to confirm the closure, can you reply with the email address on file and confirm you'd like all associated data removed as well?\n\nOnce we have that, we'll process the closure and send you confirmation.\n\nBest,\nThe Example Co. Team",
+      "draft_is_clarification_request": false,
+      "investigation_summary": "**Summary for reviewer:** ORD-77500 corresponds to a delivered shipment (no logistics issue), tied to an Enterprise account, 26 months tenure, ARR band 25k\u2013100k, with 2 prior tickets in the last 90 days. This is a churn/retention request, not a shipping complaint \u2014 recommend routing to account management/customer success for a save attempt or offboarding process rather than support/logistics, given the account's value and tenure.",
+      "usage": [
+        {
+          "input_tokens": 2545,
+          "output_tokens": 181,
+          "model": "claude-haiku-4-5"
+        },
+        {
+          "input_tokens": 725,
+          "output_tokens": 132,
+          "model": "claude-sonnet-5"
+        },
+        {
+          "input_tokens": 909,
+          "output_tokens": 115,
+          "model": "claude-sonnet-5"
+        },
+        {
+          "input_tokens": 1213,
+          "output_tokens": 149,
+          "model": "claude-sonnet-5"
+        }
+      ],
+      "latency_seconds": 15.12,
+      "ground_truth_category": "Service",
+      "split": "routing_fix_check",
+      "edge_case_type": "formal_close_large_account",
+      "expected_sensitive_topic": false,
+      "expected_retention_risk_override": true,
+      "cost": 0.017931
+    },
+    {
+      "id": "routing_002",
+      "text": "We'd like to close our account - order #ORD-88213 - after weighing up our options over the last few weeks.",
+      "entry_channel": "Support",
+      "extraction": {
+        "category": "Service",
+        "category_alternatives": [
+          "Success"
+        ],
+        "contradictory_signals": false,
+        "account_or_order_reference": "ORD-88213",
+        "issue_type": "account closure request",
+        "sentiment": "neutral",
+        "urgency": "high",
+        "expansion_intent_language": false,
+        "retention_risk_language": true,
+        "sensitive_topic_flags": [],
+        "matched_keywords": [],
+        "message_length_words": 18,
+        "reasoning": "The message explicitly requests to close the account, which is a retention-risk signal and typically routed through Service for account management. While the tone is calm and deliberate ('weighing up options'), the intent to leave is unambiguous, triggering retention_risk_language=true. Success is a plausible alternative because account closures sometimes warrant a retention conversation, but the explicit closure request makes Service the primary category."
+      },
+      "confidence": {
+        "score": 35,
+        "band": "low",
+        "reasons": [
+          "+35 account/order reference present",
+          "+15 sentiment/urgency stated unambiguously",
+          "-15 multiple categories plausible"
+        ]
+      },
+      "queue": "Service",
+      "loop_in": [
+        "Success"
+      ],
+      "guardrail_flags": [
+        "formal_close_cancel_support_owned",
+        "looped_in:Success",
+        "low_confidence_human_review"
+      ],
+      "review_priority": "urgent",
+      "requires_human_review": true,
+      "health_expansion_flag": null,
+      "draft": "Subject: Re: Account closure request\n\nHi there,\n\nThanks for letting us know, and for giving it real thought before deciding. We can close the account tied to order #ORD-88213 - to confirm this is the right one, can you verify the email address or name on the account?\n\nOnce we have that, we'll process the closure and send confirmation when it's done.\n\nBest,\nThe Example Co. Team",
+      "draft_is_clarification_request": false,
+      "investigation_summary": "Note for reviewer: ORD-88213 is a valid reference tied to a Plus-tier account (14 months old, under 5k ARR, only 1 prior ticket in 90 days) \u2014 no sign of a chronic complainer. However, the tracking data reveals a likely root cause the customer didn't mention: their DHL shipment to Germany has been stuck with no scan update for 9 days, which may be the real driver behind the \"closing account\" request rather than a pure churn decision. Recommend addressing the stalled shipment/offering resolution before processing the account closure, in case this is a save opportunity.",
+      "usage": [
+        {
+          "input_tokens": 2545,
+          "output_tokens": 200,
+          "model": "claude-haiku-4-5"
+        },
+        {
+          "input_tokens": 725,
+          "output_tokens": 123,
+          "model": "claude-sonnet-5"
+        },
+        {
+          "input_tokens": 909,
+          "output_tokens": 115,
+          "model": "claude-sonnet-5"
+        },
+        {
+          "input_tokens": 1214,
+          "output_tokens": 194,
+          "model": "claude-sonnet-5"
+        }
+      ],
+      "latency_seconds": 13.277,
+      "ground_truth_category": "Service",
+      "split": "routing_fix_check",
+      "edge_case_type": "formal_close_normal_account",
+      "expected_sensitive_topic": false,
+      "expected_retention_risk_override": true,
+      "cost": 0.018569
+    },
+    {
+      "id": "routing_003",
+      "text": "Please cancel this shipment, order #ORD-91200, we no longer need it sent.",
+      "entry_channel": "Support",
+      "extraction": {
+        "category": "Service",
+        "category_alternatives": [],
+        "contradictory_signals": false,
+        "account_or_order_reference": "ORD-91200",
+        "issue_type": "cancel shipment request",
+        "sentiment": "neutral",
+        "urgency": "high",
+        "expansion_intent_language": false,
+        "retention_risk_language": true,
+        "sensitive_topic_flags": [],
+        "matched_keywords": [
+          "shipment",
+          "order"
+        ],
+        "message_length_words": 12,
+        "reasoning": "This is a Service request to cancel a shipment, but the explicit 'cancel shipment' language triggers retention_risk_language=true per the guidelines, ensuring it routes to retention-aware handling even though the core issue is a logistics action (cancellation) rather than a complaint or account closure threat."
+      },
+      "confidence": {
+        "score": 100,
+        "band": "high",
+        "reasons": [
+          "+35 account/order reference present",
+          "+35 single fitting category, no hedging",
+          "+15 category-specific terminology matched",
+          "+15 sentiment/urgency stated unambiguously"
+        ]
+      },
+      "queue": "Service",
+      "loop_in": [
+        "Success"
+      ],
+      "guardrail_flags": [
+        "formal_close_cancel_support_owned",
+        "large_account_retention_loop_in",
+        "looped_in:Success"
+      ],
+      "review_priority": "standard",
+      "requires_human_review": true,
+      "health_expansion_flag": null,
+      "draft": "Subject: Re: Cancel shipment for order #ORD-91200\n\nHi there,\n\nWe've stopped shipment on order #ORD-91200 so it won't go out. If a refund is due, it'll process back to your original payment method within 3-5 business days, and we'll send a confirmation once that's done.\n\nLet us know if there's anything else you need adjusted on this order.\n\nBest,\nThe Example Co. Team",
+      "draft_is_clarification_request": false,
+      "investigation_summary": null,
+      "usage": [
+        {
+          "input_tokens": 2537,
+          "output_tokens": 181,
+          "model": "claude-haiku-4-5"
+        },
+        {
+          "input_tokens": 722,
+          "output_tokens": 133,
+          "model": "claude-sonnet-5"
+        }
+      ],
+      "latency_seconds": 6.367,
+      "ground_truth_category": "Service",
+      "split": "routing_fix_check",
+      "edge_case_type": "formal_cancel_large_account",
+      "expected_sensitive_topic": false,
+      "expected_retention_risk_override": true,
+      "cost": 0.007603
+    },
+    {
+      "id": "routing_004",
+      "text": "Our shipments have been slower to arrive than usual lately, and separately we wanted to check in on how our account is doing overall and what we should be thinking about as we plan for next quarter.",
+      "entry_channel": "Support",
+      "extraction": {
+        "category": "Success",
+        "category_alternatives": [
+          "Service"
+        ],
+        "contradictory_signals": false,
+        "account_or_order_reference": "",
+        "issue_type": "account review and quarterly planning",
+        "sentiment": "neutral",
+        "urgency": "medium",
+        "expansion_intent_language": true,
+        "retention_risk_language": false,
+        "sensitive_topic_flags": [],
+        "matched_keywords": [
+          "account health",
+          "review"
+        ],
+        "message_length_words": 35,
+        "reasoning": "The primary intent is a business review and forward-looking planning conversation ('check in on how our account is doing', 'plan for next quarter'), which is a classic Success use case. The slower shipments are mentioned as a secondary operational note, not the main ask. The language about planning ahead suggests an existing customer thinking about growth and optimization."
+      },
+      "confidence": {
+        "score": 15,
+        "band": "low",
+        "reasons": [
+          "+15 category-specific terminology matched",
+          "+15 sentiment/urgency stated unambiguously",
+          "-15 multiple categories plausible"
+        ]
+      },
+      "queue": "Team Lead Triage",
+      "loop_in": [
+        "Service",
+        "Success"
+      ],
+      "guardrail_flags": [
+        "team_lead_triage_low_confidence_floor",
+        "looped_in:Service,Success",
+        "low_confidence_human_review"
+      ],
+      "review_priority": "urgent",
+      "requires_human_review": true,
+      "health_expansion_flag": {
+        "flag": "possible_expansion_signal",
+        "note": "Message contains expansion-intent language. This is a text-only signal derived from this single message, not a verified account health score - treat as a prompt to look closer, not a conclusion."
+      },
+      "draft": "Subject: Re: Account review and Q planning\n\nHi there,\n\nSlower shipments are frustrating, especially when you're trying to plan ahead, and we'll get that piece looked at separately by the shipping team. On the account review and quarterly planning side, we'd like to pull together a full picture of your usage and trends before we talk next steps.\n\nCan you let us know a few times that work this week for a quick call? We'll come prepared with account data and some thoughts on what to plan for next quarter.\n\nBest,\nThe Example Co. Team\n\n---\n\n*Draft note: queue assignment unconfirmed, pending team lead review, treat as best guess.*",
+      "draft_is_clarification_request": false,
+      "investigation_summary": "This message contains no order or account reference at all \u2014 the customer is speaking generally about \"shipments\" and \"our account\" without citing any specific order number or ID. Since both lookup tools require an actual reference from the message, and I'd only be guessing if I tried to supply one, I won't call either tool here.\n\n**Note for reviewer:** No usable reference was found in this message, so no lookups were performed. This appears to be a general relationship/account-health check-in (slower shipments overall + quarterly planning) rather than a specific order issue \u2014 likely best routed to an account manager or CSM who can pull up the account directly, rather than handled via order-tracking tools.",
+      "usage": [
+        {
+          "input_tokens": 2555,
+          "output_tokens": 184,
+          "model": "claude-haiku-4-5"
+        },
+        {
+          "input_tokens": 787,
+          "output_tokens": 206,
+          "model": "claude-sonnet-5"
+        },
+        {
+          "input_tokens": 928,
+          "output_tokens": 204,
+          "model": "claude-sonnet-5"
+        }
+      ],
+      "latency_seconds": 17.721,
+      "ground_truth_category": "Service",
+      "split": "routing_fix_check",
+      "edge_case_type": "contradictory_service_success",
+      "expected_sensitive_topic": false,
+      "expected_retention_risk_override": false,
+      "cost": 0.01477
+    }
+  ]
+}

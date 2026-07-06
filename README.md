@@ -33,25 +33,29 @@ fictional.
 
 Most recent full run against the 100-message development set:
 
-- **94% classification accuracy** - every miss landed on a message
+- **95% classification accuracy** - every miss landed on a message
   deliberately written to be ambiguous, and every one of
   those was independently self-flagged as low confidence
 - **Sensitive-topic detection: 7/7 caught, 0 false positives**
   (refunds, GDPR requests, compliance/chargeback disputes - always
   routed to Service, never auto-resolved)
 - **Retention-risk detection: 3/3 caught**, including soft language
-  that never says "cancel" - plus 3 messages flagged beyond the
+  that never says "cancel" - plus 2 messages flagged beyond the
   narrow ground-truth definition (a GDPR deletion request, a
-  chargeback threat, a message quantifying serious business harm with
-  no leaving/switching language). Each has a defensible business
-  rationale on inspection, but it's an honest sign the retention-risk
-  definition itself may need tightening or deliberately broadening
-  once real usage data exists - not something to paper over
-- **Cost: $1.03 for 100 messages** (~1 cent/message), scaling to
-  roughly $61/month at a representative real inbound volume for a
-  company this size
-- **Latency: median 7.8s, p95 11.7s** per message end-to-end (up to
-  15s for the ~1-in-5 messages that trigger the agentic investigation
+  chargeback threat). Each has a defensible business rationale on
+  inspection, but it's an honest sign the retention-risk definition
+  itself may need tightening or deliberately broadening once real usage
+  data exists - not something to paper over
+- **Reference-grounded drafting: 59/100 messages matched a real mock
+  Help Centre/playbook article**, feeding the draft-quality confidence
+  score (59 high / 19 low / 22 n/a for clarification requests) - see
+  "Draft-quality confidence" in `HOW_THE_AI_WORKS.md`
+- **Cost: $1.36 for 100 messages** (~1.4 cents/message, up from ~1
+  cent before reference-grounded drafting added context to the drafting
+  call), scaling to roughly $81/month at a representative real inbound
+  volume for a company this size
+- **Latency: median 7.6s, p95 15.3s** per message end-to-end (up to
+  17s for the ~1-in-5 messages that trigger the agentic investigation
   step) - low-risk in production by design: the message would still
   sit in the normal inbox exactly as it does today, and the AI enriches
   it in the background rather than blocking a human from working the
@@ -79,18 +83,30 @@ Most recent full run against the 100-message development set:
 - **Routing + guardrails** - sensitive topics and retention risk always
   win regardless of confidence; a 4th "Team Lead Triage" queue for
   messages the system is actually unsure about, rather than a forced
-  guess
+  guess; formal close-account/cancel-shipment requests stay
+  Support-owned by default, looping in Success only for large accounts;
+  ambiguous (contradictory-signal) messages escalate to Team Lead
+  Triage rather than defaulting to Success
+- **Enterprise AE routing** - a stated shipment volume on a Sales
+  message in the top band(s) gets a distinct "Enterprise AE" handling
+  path, mirroring the real Sales form's volume field
 - **Multi-team loop-in** - a single primary owner is always kept, with
   any other team that has an independent signal (e.g. an
   expansion mention inside a support ticket) looped in rather than
   left blind
-- **Brand-guided drafting** (Sonnet 5) - reads brand tone/voice rules
-  fresh on every call, including an explicit rule set against
-  AI-sounding language
+- **Reference-grounded, brand-guided drafting** (Sonnet 5) - looks up a
+  matching mock Help Centre/playbook article for the queue before
+  drafting, reuses its substance rather than inventing an answer, and
+  reads brand tone/voice rules fresh on every call including an
+  explicit rule set against AI-sounding language
+- **Draft-quality confidence** - a second, distinct confidence score
+  from routing confidence: was this specific draft grounded in a real
+  reference article (verifiable) rather than a fully generative
+  attempt, as a rule-based proxy for "is this good enough to send"
 - **Agentic investigation** - the only agentic component: for
-  low-confidence messages, the model itself decides which read-only
-  lookups (order status, account context) are worth making before a
-  human reviews it
+  low-confidence messages, the model itself decides which of three
+  read-only tools (order status, account context, Help Centre search)
+  are worth making before a human reviews it
 
 Full detail, including the literal prompt text for every one of these
 steps, is in `HOW_THE_AI_WORKS.md`.
@@ -128,13 +144,15 @@ opus_comparison.py          Opus 4.8 vs Haiku 4.5 comparison script
 preview_server.py           Restricted local file server for viewing outputs
 run_eval.py                 Eval-as-CI regression suite (known-answer test cases, hard assertions)
 data/
-  sample_messages.json      220 synthetic test messages (100 dev / 20 held-out / 100 fresh-check), ground-truth labeled
+  sample_messages.json      239 synthetic test messages (100 dev / 20 held-out / 100 fresh-check / 15 messy-mailbox / 4 routing-fix-check), ground-truth labeled
   brand_guidelines.json      Illustrative brand tone/voice/anti-AI-isms rules
   mock_backend.json          Synthetic order/account records for the agentic investigation tools
+  help_centre_articles.json  Mock Support/Service knowledge base, keyword-matched for grounded drafting
+  success_playbook.json      Mock Customer Success playbook, same retrieval pattern
+  sales_playbook.json        Mock Sales playbook, same retrieval pattern
 deck/
   build_deck.py                   Script that generates an illustrative strategy deck
   architecture_diagram.png/.html  Architecture diagram
-  loom_script.md                   Timed Loom recording script
 HOW_THE_AI_WORKS.md        Full pipeline glossary + literal text of every real prompt
 build_status.html            Live project status tracker
 results/

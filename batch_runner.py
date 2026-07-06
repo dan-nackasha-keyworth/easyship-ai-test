@@ -190,7 +190,7 @@ def compute_stats(results, categories):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the AI message-routing pipeline over sample messages.")
-    parser.add_argument("--split", choices=["dev", "held_out", "fresh_check", "success_mailbox", "all"], default="dev",
+    parser.add_argument("--split", choices=["dev", "held_out", "fresh_check", "success_mailbox", "routing_fix_check", "all"], default="dev",
                          help="Which split to run (default: dev). Ignored if --ids is given.")
     parser.add_argument("--ids", nargs="+", help="Specific message IDs to run instead of a full split.")
     args = parser.parse_args()
