@@ -8,7 +8,7 @@ configuration in this public version is the fictional "Example Co."
 build was originally created for are delivered privately and are not
 in this repo.
 
-**Repo link:** https://github.com/ddkeyworth/ExampleCo-AI-test
+**Repo link:** https://github.com/ddkeyworth/exampleco-ai-test
 
 **Companion document:** `HOW_THE_AI_WORKS.md` (in the same repository)
 gives a plain-English glossary of every pipeline stage and the literal
